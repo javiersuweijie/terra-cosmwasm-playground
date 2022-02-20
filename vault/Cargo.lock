@@ -24,6 +24,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "astroport"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b56c6d8a5a14a5f569a3473a962ed1d12bfec2a19ef43584c86aae5667bdeaa8"
+dependencies = [
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw20",
+ "schemars",
+ "serde",
+ "terra-cosmwasm",
+ "uint",
+]
+
+[[package]]
 name = "autocfg"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -387,6 +402,28 @@ dependencies = [
  "rustc_version",
  "semver",
  "serde",
+]
+
+[[package]]
+name = "farm"
+version = "0.1.0"
+dependencies = [
+ "asset",
+ "astroport",
+ "cosmwasm-bignumber",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-storage",
+ "cw-storage-plus",
+ "cw2",
+ "cw20",
+ "cw20-base",
+ "protobuf",
+ "rustfmt",
+ "schemars",
+ "serde",
+ "thiserror",
+ "vault",
 ]
 
 [[package]]
@@ -987,6 +1024,17 @@ checksum = "fa63644f74ce96fbeb9b794f66aff2a52d601cbd5e80f4b97123e3899f4570f1"
 dependencies = [
  "kernel32-sys",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "terra-cosmwasm"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552f18cba2b535d1f8c0e3b3f37696820b954bc7535d2e33909f2a6342302718"
+dependencies = [
+ "cosmwasm-std",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

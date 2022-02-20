@@ -52,6 +52,8 @@ serde = { version = "1.0.127", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.26" }
 asset = { path = "../../packages/asset", default-features = false, version = "0.1.0"}
 protobuf = { version = "2", features = ["with-bytes"] }
+vault = { path = "../vault" }
+astroport = { version = "1.0.1" }
 
 
 [dev-dependencies]

@@ -126,6 +126,12 @@ impl fmt::Display for AssetInfo {
 }
 
 impl AssetInfo {
+    pub fn to_string(&self) -> String {
+        match self {
+            AssetInfo::Token { contract_addr } => contract_addr.into(),
+            AssetInfo::NativeToken { denom } => denom.into(),
+        }
+    }
 
     pub fn is_native_token(&self) -> bool {
         match self {

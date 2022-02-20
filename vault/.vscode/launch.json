@@ -1,0 +1,56 @@
+{"configurations":[
+    {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug unit tests in library 'asset'",
+        "cargo": {
+            "args": [
+                "test",
+                "--no-run",
+                "--lib",
+                "--package=asset"
+            ],
+            "filter": {
+                "name": "asset",
+                "kind": "lib"
+            }
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}"
+    },
+    {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug unit tests in library 'farm'",
+        "cargo": {
+            "args": [
+                "test",
+                "--no-run",
+                "--lib",
+                "--package=farm"
+            ],
+            "filter": {
+                "name": "farm",
+                "kind": "lib"
+            }
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}"
+    },
+    {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug unit tests in library 'vault'",
+        "cargo": {
+            "args": [
+                "test",
+                "--no-run",
+                "--lib",
+                "--package=vault"
+            ],
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}"
+    }
+]
+}

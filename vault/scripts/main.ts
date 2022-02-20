@@ -1,6 +1,7 @@
 import {
   BankAPI,
   Coin,
+  Coins,
   isTxError,
   LocalTerra,
   MsgExecuteContract,
@@ -20,14 +21,25 @@ import {
 const terra = new LocalTerra();
 const deployer = terra.wallets.test1;
 const user1 = terra.wallets.test2;
+const astroFactory = "terra1kyl8f2xkd63cga8szgkejdyvxay7mc7qpdc3c5";
 
+let mirUsdPoolAddress: string;
+let midUsdLpAddress: string;
 let contractAddress: string;
 let vaultToken: string;
 let cw20CodeId: number;
 let mirrorToken: string;
 
-let workerToken: string;
-let workerContractAddress: string;
+let farmContractAddress: string;
+
+async function main() {
+  await deployCw20AndMint(user1);
+  await initTest();
+  await testDepositWithCw20();
+  await testCw20Withdrawal();
+  await testOpenPosition();
+  //   await testBorrowCw20();
+}
 
 async function initTest() {
   process.stdout.write("Uploading contract...");
@@ -37,6 +49,9 @@ async function initTest() {
     "../artifacts/vault.wasm"
   );
   console.log(`Done! Code Id: ${contractCodeId}`);
+  process.stdout.write("Uploading farm...");
+  const farmCodeId = await storeCode(terra, deployer, "../artifacts/farm.wasm");
+  console.log(`Done! Code Id: ${farmCodeId}`);
 
   // Init-ing contract
   process.stdout.write("Instantiating contract...");
@@ -46,6 +61,7 @@ async function initTest() {
     },
     reserve_pool_bps: 500,
     cw20_code_id: cw20CodeId,
+    whitelisted_farms: [],
   };
   const initContract = await instantiateContract(
     terra,
@@ -60,18 +76,41 @@ async function initTest() {
   console.log("Vault Contract:", contractAddress);
 
   // Init-ing worker
-  process.stdout.write("Instantiating worker...");
+  process.stdout.write("Instantiating farm...");
   const workerContract = await instantiateContract(
     terra,
     deployer,
     deployer,
-    contractCodeId,
-    initMsg
+    farmCodeId,
+    {
+      vault_addr: contractAddress,
+      base_asset: {
+        token: { contract_addr: mirrorToken },
+      },
+      other_asset: {
+        native_token: { denom: "uusd" },
+      },
+      claim_asset_addr: midUsdLpAddress,
+      astroport_factory_addr: astroFactory,
+    }
   );
   console.log(`Done!`);
-  workerContractAddress = workerContract.logs[0].events[0].attributes[0].value;
-  workerToken = workerContract.logs[0].events[3].attributes[1].value;
-  console.log("Worker Contract:", workerContractAddress);
+  farmContractAddress = workerContract.logs[0].events[0].attributes[3].value;
+  console.log("Farm Contract:", farmContractAddress);
+
+  const farmConfig = await terra.wasm.contractQuery<any>(farmContractAddress, {
+    get_farm: {},
+  });
+
+  console.log(farmConfig);
+
+  await sendTransaction(terra, deployer, [
+    new MsgExecuteContract(deployer.key.accAddress, contractAddress, {
+      add_whitelist: {
+        address: farmContractAddress,
+      },
+    }),
+  ]);
 
   const vaultConfig = await terra.wasm.contractQuery<any>(contractAddress, {
     get_vault_config: {},
@@ -79,6 +118,21 @@ async function initTest() {
 
   expect(vaultConfig.vault_token_addr).to.eq(vaultToken);
   expect(vaultConfig.asset_info.token.contract_addr).to.eq(mirrorToken);
+  expect(vaultConfig.whitelisted_farms[0]).to.equal(farmContractAddress);
+
+  const pairInfo = await terra.wasm.contractQuery<any>(astroFactory, {
+    pair: {
+      asset_infos: [
+        {
+          token: {
+            contract_addr: mirrorToken,
+          },
+        },
+        { native_token: { denom: "uusd" } },
+      ],
+    },
+  });
+  console.log(pairInfo);
 }
 
 async function deployCw20AndMint(to: Wallet) {
@@ -111,6 +165,68 @@ async function deployCw20AndMint(to: Wallet) {
       },
     }),
   ]);
+
+  // Create astroport pool
+  const pool = await sendTransaction(terra, deployer, [
+    new MsgExecuteContract(deployer.key.accAddress, astroFactory, {
+      create_pair: {
+        pair_type: { xyk: {} },
+        asset_infos: [
+          {
+            token: { contract_addr: mirrorToken },
+          },
+          {
+            native_token: { denom: "uusd" },
+          },
+        ],
+      },
+    }),
+  ]);
+  console.log(pool);
+  mirUsdPoolAddress = pool.logs[0].events[4].attributes[7].value;
+  midUsdLpAddress = pool.logs[0].events[2].attributes[7].value;
+  const provide = await sendTransaction(terra, to, [
+    new MsgExecuteContract(to.key.accAddress, mirrorToken, {
+      increase_allowance: {
+        amount: "10000000",
+        spender: mirUsdPoolAddress,
+      },
+    }),
+    new MsgExecuteContract(
+      to.key.accAddress,
+      mirUsdPoolAddress,
+      {
+        provide_liquidity: {
+          assets: [
+            {
+              info: { token: { contract_addr: mirrorToken } },
+              amount: "5000000",
+            },
+            {
+              info: { native_token: { denom: "uusd" } },
+              amount: "10000000",
+            },
+          ],
+        },
+      },
+      [new Coin("uusd", "10000000")]
+    ),
+  ]);
+  console.log(provide);
+
+  const simulation = await terra.wasm.contractQuery(mirUsdPoolAddress, {
+    simulation: {
+      offer_asset: {
+        info: {
+          token: {
+            contract_addr: mirrorToken,
+          },
+        },
+        amount: "1000000",
+      },
+    },
+  });
+  console.log(simulation);
 }
 
 async function testDepositWithCw20() {
@@ -214,38 +330,28 @@ async function createPosition(
 ) {
   const borrowResponse = await sendTransaction(terra, user, [
     new MsgExecuteContract(user.key.accAddress, mirrorToken, {
-      send: {
+      increase_allowance: {
         amount: principalAmount,
-        contract: contractAddress,
-        msg: toEncodedBinary({
-          borrow: {
-            worker_addr: workerContractAddress,
-            borrow_amount: borrowAmount,
-          },
-        }),
+        spender: farmContractAddress,
+      },
+    }),
+    new MsgExecuteContract(user.key.accAddress, farmContractAddress, {
+      open: {
+        base_asset_amount: principalAmount,
+        borrow_amount: borrowAmount,
       },
     }),
   ]);
-  let positionId = borrowResponse.logs[0].events[3].attributes[6].value;
+  let positionId = borrowResponse.logs[1].events[6].attributes[7].value;
   return positionId;
 }
 
-async function testBorrowCw20() {
-  await sendTransaction(terra, user1, [
-    new MsgExecuteContract(user1.key.accAddress, mirrorToken, {
-      send: {
-        amount: "100000000",
-        contract: contractAddress,
-        msg: toEncodedBinary({
-          deposit: {},
-        }),
-      },
-    }),
-  ]);
-  let positionId = await createPosition(user1, "10000000", "10000000");
+async function testOpenPosition() {
+  await testDepositWithCw20();
+  let positionId = await createPosition(user1, "9000", "8000");
   let workerTokenAmount = await queryTokenBalance(
     terra,
-    workerContractAddress,
+    farmContractAddress,
     mirrorToken
   );
   expect(workerTokenAmount).to.eq("20000000");
@@ -268,7 +374,7 @@ async function testBorrowCw20() {
   });
   expect(position.debt_share).to.eq("10000000");
   expect(position.owner).to.eq(user1.key.accAddress);
-  expect(position.worker).to.eq(workerContractAddress);
+  expect(position.worker).to.eq(farmContractAddress);
 
   // Create a new position
   positionId = await createPosition(user1, "10000000", "15000000");
@@ -283,7 +389,7 @@ async function testBorrowCw20() {
   });
   expect(position.debt_share).to.eq("15000000");
   expect(position.owner).to.eq(user1.key.accAddress);
-  expect(position.worker).to.eq(workerContractAddress);
+  expect(position.worker).to.eq(farmContractAddress);
 }
 
 async function testSettlementWithCw20() {
@@ -441,9 +547,5 @@ async function testPayPaymentRequestWithLessAmount() {
 }
 
 (async () => {
-  await deployCw20AndMint(user1);
-  await initTest();
-  await testDepositWithCw20();
-  await testCw20Withdrawal();
-  await testBorrowCw20();
+  await main();
 })();

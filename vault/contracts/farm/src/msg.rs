@@ -6,30 +6,35 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub base_asset_info: AssetInfo,
-    pub other_asset_info: AssetInfo,
+    pub vault_addr: String,
+    pub base_asset: AssetInfo,
+    pub other_asset: AssetInfo,
+    pub claim_asset_addr: String,
+    pub astroport_factory_addr: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     Receive(Cw20ReceiveMsg),
+    Open {
+        borrow_amount: Uint128,
+        base_asset_amount: Uint128,
+    },
     Close {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetPosition { vault_position: String },
+    GetFarm {},
+    GetPosition { vault_position_id: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
-    Open {
-        base_asset_to_borrow: Asset,
-        other_asset_to_borrow: Asset,
-    },
+    // Open { borrow_amount: Uint128 },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
